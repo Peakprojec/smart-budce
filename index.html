@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="az">
 <head>
 <meta charset="UTF-8">
@@ -74,28 +74,39 @@ window.loadFromCloud = async function() {
 };
 
 // Handle redirect result on page load
-getRedirectResult(auth).catch(e => console.error('Redirect error:', e));
+getRedirectResult(auth).then(result => {
+  if(result && result.user) {
+    console.log('Redirect sign-in success:', result.user.email);
+  }
+}).catch(e => console.error('Redirect error:', e));
 
 // Auth state listener
 onAuthStateChanged(auth, async (user) => {
   currentUser = user;
+  const loginScreen = document.getElementById('loginScreen');
+  const appWrapper = document.getElementById('appWrapper');
   if (user) {
     // Logged in
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('appWrapper').style.display = 'block';
-    document.getElementById('userAvatar').src = user.photoURL || '';
-    document.getElementById('userName').textContent = user.displayName || user.email;
+    loginScreen.style.display = 'none';
+    appWrapper.style.display = 'flex';
+    appWrapper.style.flexDirection = 'column';
+    appWrapper.style.minHeight = '100vh';
+    // Update user info
+    const avatar = document.getElementById('userAvatar');
+    const name = document.getElementById('userName');
+    if(avatar) avatar.src = user.photoURL || '';
+    if(name) name.textContent = user.displayName || user.email;
     // Load cloud data
     const cloudData = await window.loadFromCloud();
     if (cloudData) {
       window.applyCloudData(cloudData);
     }
-    window.initUI();
-    window.setupPWA();
+    if(window.initUI) window.initUI();
+    if(window.setupPWA) window.setupPWA();
   } else {
     // Logged out
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('appWrapper').style.display = 'none';
+    loginScreen.style.display = 'flex';
+    appWrapper.style.display = 'none';
   }
 });
 </script>
