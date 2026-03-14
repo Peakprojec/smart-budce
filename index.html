@@ -11,6 +11,86 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAbnLkZ8E31G7lekxRkYS80mSwvYxJzlf0",
+  authDomain: "smart-budce.firebaseapp.com",
+  projectId: "smart-budce",
+  storageBucket: "smart-budce.firebasestorage.app",
+  messagingSenderId: "686495122114",
+  appId: "1:686495122114:web:b9f0c9caadafc53bf2f15b"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+let currentUser = null;
+
+// Sign in
+window.firebaseSignIn = async function() {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch(e) {
+    alert('Giriş xətası: ' + e.message);
+  }
+};
+
+// Sign out
+window.firebaseSignOut = async function() {
+  await signOut(auth);
+};
+
+// Save to Firestore
+window.saveToCloud = async function(data) {
+  if (!currentUser) return;
+  try {
+    await setDoc(doc(db, 'users', currentUser.uid), data);
+  } catch(e) {
+    console.error('Cloud save error:', e);
+  }
+};
+
+// Load from Firestore
+window.loadFromCloud = async function() {
+  if (!currentUser) return null;
+  try {
+    const snap = await getDoc(doc(db, 'users', currentUser.uid));
+    return snap.exists() ? snap.data() : null;
+  } catch(e) {
+    console.error('Cloud load error:', e);
+    return null;
+  }
+};
+
+// Auth state listener
+onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+  if (user) {
+    // Logged in
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appWrapper').style.display = 'block';
+    document.getElementById('userAvatar').src = user.photoURL || '';
+    document.getElementById('userName').textContent = user.displayName || user.email;
+    // Load cloud data
+    const cloudData = await window.loadFromCloud();
+    if (cloudData) {
+      window.applyCloudData(cloudData);
+    }
+    window.initUI();
+    window.setupPWA();
+  } else {
+    // Logged out
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appWrapper').style.display = 'none';
+  }
+});
+</script>
 <style>
 :root {
   --bg:#0f0f1a;--surface:#16162a;--surface2:#1e1e35;--surface3:#26263f;
@@ -294,13 +374,43 @@ option{background:#1e1e35;color:#f0f0ff;}
 .file-label{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:var(--rsm);background:var(--orange-d);color:var(--orange);border:1px solid rgba(255,159,67,.25);cursor:pointer;font-size:14px;font-weight:700;transition:all .2s;}
 .file-label:hover{background:rgba(255,159,67,.2);transform:translateY(-2px);}
 @supports(padding:max(0px)){.topbar{padding-top:max(0px,env(safe-area-inset-top));}. content{padding-bottom:max(28px,calc(env(safe-area-inset-bottom) + 28px));}}
+/* LOGIN */
+.login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-box{background:var(--surface);border:1px solid var(--border2);border-radius:24px;padding:40px 32px;width:100%;max-width:380px;text-align:center;position:relative;overflow:hidden;}
+.login-box::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(108,99,255,.12),transparent 60%);pointer-events:none;}
+.login-logo{width:72px;height:72px;background:linear-gradient(135deg,var(--purple),var(--pink));border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 20px;box-shadow:0 8px 32px rgba(108,99,255,.4);}
+.login-title{font-size:26px;font-weight:900;letter-spacing:-.03em;margin-bottom:8px;background:linear-gradient(135deg,var(--text) 60%,var(--purple-l));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.login-sub{font-size:14px;color:var(--text3);margin-bottom:32px;font-weight:500;}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:14px 20px;background:#fff;color:#1a1a1a;border:none;border-radius:var(--rsm);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 16px rgba(0,0,0,.15);}
+.btn-google:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.2);}
+.btn-google svg{width:22px;height:22px;flex-shrink:0;}
+.user-bar{display:flex;align-items:center;gap:8px;}
+.user-avatar{width:32px;height:32px;border-radius:50%;border:2px solid var(--purple);object-fit:cover;}
+.user-name{font-size:13px;font-weight:700;color:var(--text2);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.btn-signout{font-size:12px;font-weight:700;padding:6px 12px;background:var(--red-d);color:var(--red);border:1px solid rgba(255,71,87,.2);border-radius:8px;cursor:pointer;transition:all .2s;}
+.btn-signout:hover{background:rgba(255,71,87,.2);}
+.cloud-saving{font-size:11px;color:var(--green);font-weight:700;}
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast">✓ Yadda saxlanıldı</div>
 
-<!-- TOPBAR -->
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">💰</div>
+    <div class="login-title">Smart Büdcə</div>
+    <div class="login-sub">Maliyyəni ağıllı idarə et.<br>Hesabına daxil ol, məlumatların buludda qalsın.</div>
+    <button class="btn-google" onclick="firebaseSignIn()">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Google ilə daxil ol
+    </button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appWrapper" style="display:none">
 <div class="topbar">
   <a class="brand" href="#">
     <div class="brand-logo">💰</div>
@@ -308,6 +418,11 @@ option{background:#1e1e35;color:#f0f0ff;}
   </a>
   <div class="topbar-right">
     <button class="icon-btn" onclick="toggleTheme()" id="themeBtn">🌙</button>
+    <div class="user-bar">
+      <img class="user-avatar" id="userAvatar" src="" alt="">
+      <span class="user-name" id="userName"></span>
+      <button class="btn-signout" onclick="firebaseSignOut()">Çıxış</button>
+    </div>
     <button class="icon-btn hamburger" onclick="openDrawer()">☰</button>
   </div>
 </div>
@@ -530,6 +645,18 @@ option{background:#1e1e35;color:#f0f0ff;}
   </div>
 </div>
 
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box" style="max-width:380px;text-align:center;">
+    <div style="font-size:40px;margin-bottom:12px" id="confirmIcon">🗑</div>
+    <div class="modal-title" style="justify-content:center;margin-bottom:10px" id="confirmTitle">Silmək istəyirsiniz?</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:24px" id="confirmMsg">Bu əməliyyat geri qaytarıla bilməz.</div>
+    <div class="btn-row" style="margin-top:0">
+      <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Ləğv et</button>
+      <button class="btn btn-danger" id="confirmOkBtn">🗑 Sil</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="editBudgetModal" onclick="handleOC(event,'editBudgetModal')">
   <div class="modal-box">
     <div class="modal-header"><div class="modal-title" id="editBudgetTitle">Büdcəni Redaktə et</div><button class="modal-close" onclick="closeModal('editBudgetModal')">✕</button></div>
@@ -574,11 +701,19 @@ option{background:#1e1e35;color:#f0f0ff;}
   </div>
 </div>
 
+</div><!-- /appWrapper -->
+
 <script>
 // ── STATE ──
 let transactions=[], budgets=[], goals=[], recurring=[], journal=[];
 let settings={ currencySymbol:'₼', theme:'dark', categories:{ income:['Maaş','Bonus','İnvestisiya','Freelance','Digər Gəlir'], expense:['Yemək','Nəqliyyat','Kommunal','Əyləncə','Alış-veriş','Səhiyyə','Təhsil','Digər Xərc'] }};
 let catCI=null, trendCI=null, storageOk=false, toastT=null, selMood='', deferredPWA=null;
+
+// ── CLOUD DATA APPLY ──
+window.applyCloudData = function(d) {
+  transactions=d.transactions||[]; budgets=d.budgets||[]; goals=d.goals||[]; recurring=d.recurring||[]; journal=d.journal||[];
+  if(d.settings){ settings={...settings,...d.settings}; if(!settings.categories) settings.categories=defCats(); }
+};
 
 // ── STORAGE ──
 function checkStorage(){
@@ -587,20 +722,20 @@ function checkStorage(){
 }
 function saveData(){
   const d={transactions,budgets,goals,recurring,journal,settings,v:3,ts:Date.now()};
-  if(!storageOk) return showToast('⚠️ Saxlanmadı!');
-  try{ const j=JSON.stringify(d); localStorage.setItem('sb_v3',j); localStorage.setItem('sb_bk',j); }
-  catch(e){ try{ localStorage.removeItem('smartBudgetData'); localStorage.setItem('sb_v3',JSON.stringify(d)); }catch(e2){ showToast('⚠️ Yaddaş dolu!'); return; }}
-  showToast('✓ Yadda saxlanıldı');
+  // Save to cloud if logged in
+  if(window.saveToCloud) window.saveToCloud(d);
+  // Also save locally as backup
+  if(storageOk){ try{ const j=JSON.stringify(d); localStorage.setItem('sb_v3',j); }catch(e){} }
+  showToast('✓ Yadda saxlanıldı ☁️');
 }
 function loadData(){
   if(!storageOk) return;
-  const raw=localStorage.getItem('sb_v3')||localStorage.getItem('smartBudgetData_v2')||localStorage.getItem('smartBudgetData')||localStorage.getItem('sb_bk');
+  const raw=localStorage.getItem('sb_v3')||localStorage.getItem('smartBudgetData_v2')||localStorage.getItem('smartBudgetData');
   if(!raw) return;
   try{
     const d=JSON.parse(raw);
     transactions=d.transactions||[]; budgets=d.budgets||[]; goals=d.goals||[]; recurring=d.recurring||[]; journal=d.journal||[];
-    if(d.settings){ settings={...settings,...d.settings}; if(!settings.categories) settings.categories=defCats(); if(!Array.isArray(settings.categories.income)) settings.categories.income=defCats().income; if(!Array.isArray(settings.categories.expense)) settings.categories.expense=defCats().expense; }
-    if(!localStorage.getItem('sb_v3')) saveData();
+    if(d.settings){ settings={...settings,...d.settings}; if(!settings.categories) settings.categories=defCats(); }
   }catch(e){ console.error('Load err',e); }
 }
 function defCats(){ return { income:['Maaş','Bonus','İnvestisiya','Freelance','Digər Gəlir'], expense:['Yemək','Nəqliyyat','Kommunal','Əyləncə','Alış-veriş','Səhiyyə','Təhsil','Digər Xərc'] }; }
@@ -666,7 +801,8 @@ function submitTx(){
 }
 function clearForm(){ document.getElementById('editId').value=''; document.getElementById('txName').value=''; document.getElementById('txAmount').value=''; document.getElementById('txDate').value=today(); document.getElementById('txType').value='expense'; document.getElementById('txNote').value=''; syncCatDrop(); document.getElementById('formTitle').textContent='Yeni Əməliyyat'; document.getElementById('submitBtn').textContent='+ Əlavə et'; }
 function editTx(id){ const t=transactions.find(t=>t.id===id); if(!t) return; document.getElementById('editId').value=t.id; document.getElementById('txName').value=t.name; document.getElementById('txAmount').value=t.amount; document.getElementById('txDate').value=t.date; document.getElementById('txType').value=t.type; syncCatDrop(); document.getElementById('txCategory').value=t.category; document.getElementById('txNote').value=t.notes||''; document.getElementById('formTitle').textContent='Əməliyyatı Redaktə et'; document.getElementById('submitBtn').textContent='✓ Yenilə'; showTab('transactions'); window.scrollTo({top:0,behavior:'smooth'}); }
-function delTx(id){ if(!confirm('Silmək istəyirsiniz?')) return; transactions=transactions.filter(t=>t.id!==id); saveData(); filterTx(); if(document.getElementById('budget').classList.contains('active')) renderBudgets(); }
+function customConfirm(title,msg,onOk,icon='🗑'){ document.getElementById('confirmIcon').textContent=icon; document.getElementById('confirmTitle').textContent=title; document.getElementById('confirmMsg').textContent=msg; document.getElementById('confirmOkBtn').onclick=()=>{ closeModal('confirmModal'); onOk(); }; openModal('confirmModal'); }
+function delTx(id){ customConfirm('Əməliyyatı sil?','Bu əməliyyat geri qaytarıla bilməz.',()=>{ transactions=transactions.filter(t=>t.id!==id); saveData(); filterTx(); if(document.getElementById('budget').classList.contains('active')) renderBudgets(); }); }
 
 const ICONS={'Yemək':'🍔','Nəqliyyat':'🚗','Kommunal':'💡','Əyləncə':'🎮','Alış-veriş':'🛍️','Səhiyyə':'💊','Təhsil':'📚','Maaş':'💼','Bonus':'🎁','İnvestisiya':'📈','Freelance':'💻','Digər Gəlir':'💰','Digər Xərc':'📦'};
 function catIcon(cat,type){ return ICONS[cat]||(type==='income'?'💚':'💸'); }
@@ -705,7 +841,7 @@ function drawTrendChart(data,period){ const ctx=document.getElementById('trendCh
 
 // ── BUDGET ──
 function saveBudget(){ const cat=document.getElementById('bCat').value, limit=parseFloat(document.getElementById('bLimit').value); if(!cat||isNaN(limit)||limit<=0){alert('Kateqoriya seçin və düzgün limit daxil edin.');return;} if(budgets.some(b=>b.category===cat)){alert('Bu kateqoriya üçün artıq büdcə var.');return;} budgets.push({category:cat,limit}); budgets.sort((a,b)=>a.category.localeCompare(b.category)); saveData(); renderBudgets(); closeModal('budgetModal'); }
-function delBudget(cat){ if(!confirm(`'${cat}' büdcəsini silmək istəyirsiniz?`)) return; budgets=budgets.filter(b=>b.category!==cat); saveData(); renderBudgets(); }
+function delBudget(cat){ customConfirm(`"${cat}" büdcəsini sil?`,'Bu büdcə geri qaytarıla bilməz.',()=>{ budgets=budgets.filter(b=>b.category!==cat); saveData(); renderBudgets(); }); }
 function openEditBudget(cat){ const b=budgets.find(b=>b.category===cat); if(!b) return; document.getElementById('editBudgetCat').value=cat; document.getElementById('editBudgetCatShow').value=cat; document.getElementById('editBudgetTitle').textContent=`"${cat}" Büdcəsini Redaktə et`; document.getElementById('editBudgetLimit').value=b.limit; openModal('editBudgetModal'); setTimeout(()=>document.getElementById('editBudgetLimit').focus(),100); }
 function updateBudget(){ const cat=document.getElementById('editBudgetCat').value, limit=parseFloat(document.getElementById('editBudgetLimit').value); if(isNaN(limit)||limit<=0){alert('Düzgün limit daxil edin.');return;} const i=budgets.findIndex(b=>b.category===cat); if(i>-1) budgets[i].limit=limit; saveData(); renderBudgets(); closeModal('editBudgetModal'); showToast(`✓ "${cat}" büdcəsi yeniləndi`); }
 function renderBudgets(){ const c=document.getElementById('budgetContainer'); if(!budgets.length){c.innerHTML=`<div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">Büdcə yoxdur</div><div class="empty-sub">Yuxarıdan yeni büdcə əlavə et</div></div>`;return;} const md=getForPeriod('current-month'), grid=document.createElement('div'); grid.className='budget-grid'; budgets.forEach(b=>{ const spent=md.filter(t=>t.type==='expense'&&t.category===b.category).reduce((s,t)=>s+t.amount,0), pct=b.limit>0?Math.min((spent/b.limit)*100,100):0, rem=b.limit-spent, cls=pct>=100?'over':pct>=80?'warn':'safe', status=pct>=100?`⚠ ${fmt(Math.abs(rem))} artıq xərcləndi!`:`${fmt(rem)} qalıb (${(100-pct).toFixed(1)}%)`; const card=document.createElement('div'); card.className='budget-card'; card.innerHTML=`<div class="budget-top"><span class="budget-name">${catIcon(b.category,'expense')} ${b.category}</span><div style="display:flex;gap:4px"><button class="act-btn edit" title="Redaktə et" onclick="openEditBudget('${b.category}')">✏️</button><button class="act-btn del" title="Sil" onclick="delBudget('${b.category}')">🗑</button></div></div><div class="budget-figures"><span>Xərclənən: <strong>${fmt(spent)}</strong></span><span>Limit: <strong>${fmt(b.limit)}</strong></span></div><div class="budget-track"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div><div class="budget-status ${cls}">${status}</div>`; grid.appendChild(card); }); c.innerHTML=''; c.appendChild(grid); }
@@ -714,12 +850,12 @@ function renderBudgets(){ const c=document.getElementById('budgetContainer'); if
 function saveGoal(){ const name=document.getElementById('gName').value.trim(), target=parseFloat(document.getElementById('gTarget').value), saved=parseFloat(document.getElementById('gSaved').value)||0, icon=document.getElementById('gIcon').value.trim()||'🎯', deadline=document.getElementById('gDeadline').value; if(!name||isNaN(target)||target<=0){alert('Ad və hədəf məbləğ mütləqdir.');return;} goals.push({id:Date.now(),name,target,saved,icon,deadline}); saveData(); renderGoals(); closeModal('goalModal'); ['gName','gTarget','gSaved','gIcon','gDeadline'].forEach(id=>document.getElementById(id).value=''); }
 function openAddToGoal(id){ const g=goals.find(g=>g.id===id); if(!g) return; document.getElementById('addGoalId').value=id; document.getElementById('addGoalTitle').textContent=`"${g.name}" hədəfinə əlavə et`; document.getElementById('addGoalAmt').value=''; openModal('addGoalModal'); }
 function addToGoal(){ const id=parseInt(document.getElementById('addGoalId').value), amount=parseFloat(document.getElementById('addGoalAmt').value); if(isNaN(amount)||amount<=0){alert('Məbləğ daxil edin.');return;} const g=goals.find(g=>g.id===id); if(!g) return; g.saved=Math.min(g.saved+amount,g.target); saveData(); renderGoals(); closeModal('addGoalModal'); }
-function delGoal(id){ if(!confirm('Bu hədəfi silmək istəyirsiniz?')) return; goals=goals.filter(g=>g.id!==id); saveData(); renderGoals(); }
+function delGoal(id){ customConfirm('Hədəfi sil?','Bu hədəf geri qaytarıla bilməz.',()=>{ goals=goals.filter(g=>g.id!==id); saveData(); renderGoals(); },'🏆'); }
 function renderGoals(){ const grid=document.getElementById('goalGrid'); if(!goals.length){grid.innerHTML=`<div class="empty-state"><div class="empty-icon">🏆</div><div class="empty-text">Hədəf yoxdur</div><div class="empty-sub">İlk maliyyə hədəfini əlavə et</div></div>`;return;} grid.innerHTML=''; goals.forEach(g=>{ const pct=g.target>0?Math.min((g.saved/g.target)*100,100):0, done=pct>=100; const card=document.createElement('div'); card.className='goal-card'; let dlHtml=''; if(g.deadline){ const dl=Math.ceil((new Date(g.deadline)-new Date())/86400000); dlHtml=`<div class="goal-deadline" style="color:${dl<0?'var(--red)':dl<30?'var(--orange)':'var(--text3)'}">${dl<0?'Son tarix keçdi':dl===0?'Bu gün!':dl+' gün qaldı'}</div>`; } card.innerHTML=`${done?'<div class="goal-done-badge">✓ Tamamlandı</div>':''}<div class="goal-icon">${g.icon}</div><div class="goal-name">${esc(g.name)}</div><div class="goal-target">Hədəf: ${fmt(g.target)}</div>${dlHtml}<div class="goal-saved">${fmt(g.saved)}</div><div class="goal-track"><div class="goal-fill ${done?'done':''}" style="width:${pct}%"></div></div><div class="goal-pct">${pct.toFixed(1)}% tamamlandı</div><div class="goal-actions">${!done?`<button class="btn btn-primary btn-sm" onclick="openAddToGoal(${g.id})">+ Əlavə et</button>`:''}<button class="btn btn-danger btn-sm" onclick="delGoal(${g.id})">Sil</button></div>`; grid.appendChild(card); }); }
 
 // ── RECURRING ──
 function saveRecurring(){ const name=document.getElementById('rName').value.trim(), amount=parseFloat(document.getElementById('rAmount').value), type=document.getElementById('rType').value, category=document.getElementById('rCat').value, freq=document.getElementById('rFreq').value, day=parseInt(document.getElementById('rDay').value)||1; if(!name||isNaN(amount)||amount<=0){alert('Ad və məbləğ mütləqdir.');return;} recurring.push({id:Date.now(),name,amount,type,category,freq,day}); saveData(); renderRecurring(); updateRecurPreview(); closeModal('recurModal'); document.getElementById('rName').value=''; document.getElementById('rAmount').value=''; }
-function delRecurring(id){ if(!confirm('Silinsin?')) return; recurring=recurring.filter(r=>r.id!==id); saveData(); renderRecurring(); updateRecurPreview(); }
+function delRecurring(id){ customConfirm('Təkrarlananı sil?','Bu qeyd geri qaytarıla bilməz.',()=>{ recurring=recurring.filter(r=>r.id!==id); saveData(); renderRecurring(); updateRecurPreview(); },'🔄'); }
 function applyRecurring(id){ const r=recurring.find(r=>r.id===id); if(!r) return; if(!confirm(`"${r.name}" əməliyyatını bu gün üçün əlavə edək?`)) return; transactions.push({id:Date.now(),name:r.name,amount:r.amount,date:today(),type:r.type,category:r.category,notes:'Avtomatik - Təkrarlanan',recurring:true}); transactions.sort((a,b)=>b.date.localeCompare(a.date)); saveData(); filterTx(); showToast(`✓ "${r.name}" əlavə edildi`); }
 function renderRecurring(){ const list=document.getElementById('recurList'); if(!recurring.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text">Təkrarlanan yoxdur</div><div class="empty-sub">Aylıq sabit əməliyyatlarını əlavə et</div></div>`;return;} list.innerHTML=''; const fMap={monthly:'Aylıq',weekly:'Həftəlik',yearly:'İllik'}; recurring.forEach(r=>{ const item=document.createElement('div'); item.className=`rec-item ${r.type}`; item.innerHTML=`<div class="rec-icon" style="background:${r.type==='income'?'var(--green-d)':'var(--pink-d)'}">${catIcon(r.category,r.type)}</div><div class="rec-info"><div class="rec-name">${esc(r.name)}</div><div class="rec-meta">${esc(r.category)} · ${fMap[r.freq]||r.freq}${r.freq==='monthly'?' · '+r.day+'-ci gün':''}</div></div><div class="rec-amount">${r.type==='income'?'+':'−'} ${fmt(r.amount)}</div><div class="tx-actions"><button class="act-btn" title="Bu gün üçün əlavə et" onclick="applyRecurring(${r.id})">▶️</button><button class="act-btn del" onclick="delRecurring(${r.id})">🗑</button></div>`; list.appendChild(item); }); }
 function updateRecurPreview(){ const el=document.getElementById('recurPreview'); if(!recurring.length){el.textContent='—';return;} let inc=0,exp=0; recurring.forEach(r=>{ const m=r.freq==='weekly'?4:r.freq==='yearly'?1/12:1; r.type==='income'?inc+=r.amount*m:exp+=r.amount*m; }); el.innerHTML=`<span style="color:var(--green)">+${fmt(inc)}</span> gəlir, <span style="color:var(--pink)">−${fmt(exp)}</span> xərc gözlənilir. <strong>Net: <span style="color:${inc-exp>=0?'var(--cyan)':'var(--red)'}">${fmt(inc-exp)}</span></strong>`; }
@@ -727,7 +863,7 @@ function updateRecurPreview(){ const el=document.getElementById('recurPreview');
 // ── JOURNAL ──
 function selectMood(btn){ document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); selMood=btn.dataset.mood; }
 function addJournal(){ const text=document.getElementById('journalText').value.trim(); if(!text){alert('Qeyd boş ola bilməz.');return;} journal.unshift({id:Date.now(),date:today(),text,mood:selMood}); document.getElementById('journalText').value=''; selMood=''; document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected')); saveData(); renderJournal(); }
-function delJournal(id){ if(!confirm('Silinsin?')) return; journal=journal.filter(j=>j.id!==id); saveData(); renderJournal(); }
+function delJournal(id){ customConfirm('Jurnal qeydini sil?','Bu qeyd geri qaytarıla bilməz.',()=>{ journal=journal.filter(j=>j.id!==id); saveData(); renderJournal(); },'📓'); }
 function renderJournal(){ const list=document.getElementById('journalList'); if(!journal.length){list.innerHTML=`<div class="empty-state"><div class="empty-icon">📓</div><div class="empty-text">Jurnal boşdur</div><div class="empty-sub">İlk maliyyə qeydini yaz</div></div>`;return;} list.innerHTML=''; journal.forEach(j=>{ const item=document.createElement('div'); item.className='journal-item'; item.innerHTML=`<div class="journal-actions"><button class="act-btn del" onclick="delJournal(${j.id})">🗑</button></div>${j.mood?`<div class="journal-mood">${j.mood}</div>`:''}<div class="journal-date">${fmtDate(j.date)}</div><div class="journal-text">${esc(j.text)}</div>`; list.appendChild(item); }); }
 
 // ── REPORTS ──
@@ -738,10 +874,10 @@ function exportCSV(data,fn){ const c=data.map(r=>r.map(f=>{const s=String(f);ret
 function updateCurrency(val){ settings.currencySymbol=val.trim()||'₼'; saveData(); filterTx(); if(document.getElementById('budget').classList.contains('active')) renderBudgets(); }
 function renderCatList(){ const list=document.getElementById('catList'); list.innerHTML=''; const all=[...settings.categories.income.map(c=>({name:c,type:'income'})),...settings.categories.expense.map(c=>({name:c,type:'expense'}))].sort((a,b)=>a.name.localeCompare(b.name)); if(!all.length){list.innerHTML='<p style="color:var(--text3);font-size:13px;">Kateqoriya yoxdur.</p>';return;} all.forEach(cat=>{const item=document.createElement('div'); item.className='cat-item'; item.innerHTML=`<span>${esc(cat.name)}<span class="cat-badge ${cat.type}">${cat.type==='income'?'Gəlir':'Xərc'}</span></span><button class="act-btn del" onclick="delCat('${esc(cat.name)}','${cat.type}')">🗑</button>`; list.appendChild(item);}); }
 function addCategory(){ const name=document.getElementById('sCatName').value.trim(), type=document.getElementById('sCatType').value; if(!name){alert('Ad boş ola bilməz.');return;} if(settings.categories.income.includes(name)||settings.categories.expense.includes(name)){alert('Bu ad artıq var.');return;} settings.categories[type].push(name); settings.categories[type].sort(); saveData(); populateDropdowns(); renderCatList(); document.getElementById('sCatName').value=''; }
-function delCat(name,type){ if(type==='expense'&&budgets.some(b=>b.category===name)){alert('Bu kateqoriya üçün büdcə var. Əvvəlcə büdcəni sil.');return;} if(!confirm(`'${name}' silinsin?`)) return; settings.categories[type]=settings.categories[type].filter(c=>c!==name); saveData(); populateDropdowns(); renderCatList(); filterTx(); }
+function delCat(name,type){ if(type==='expense'&&budgets.some(b=>b.category===name)){alert('Bu kateqoriya üçün büdcə var. Əvvəlcə büdcəni sil.');return;} customConfirm(`"${name}" kateqoriyasını sil?`,'Bu kateqoriya bütün yerlərden silinəcək.',()=>{ settings.categories[type]=settings.categories[type].filter(c=>c!==name); saveData(); populateDropdowns(); renderCatList(); filterTx(); },'🏷️'); }
 function exportData(){ try{ const j=JSON.stringify({transactions,budgets,goals,recurring,journal,settings},null,2),b=new Blob([j],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a'); a.href=u; a.download=`smart_budget_${today()}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u); }catch(e){alert('Export xətası: '+e.message);} }
 function importData(e){ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const d=JSON.parse(ev.target.result); if(!d||typeof d!=='object') throw new Error('Format yanlışdır'); if(!confirm('Mövcud məlumatlar əvəz olunacaq. Davam?')) return; transactions=d.transactions||[]; budgets=d.budgets||[]; goals=d.goals||[]; recurring=d.recurring||[]; journal=d.journal||[]; settings={...settings,...(d.settings||{})}; if(!settings.categories) settings.categories=defCats(); saveData(); initUI(); alert('İmport uğurlu!'); }catch(err){alert('İmport xətası: '+err.message);}finally{e.target.value=null;}}; reader.readAsText(file); }
-function resetAll(){ if(!confirm('BÜTÜN məlumatlar silinsin? Bu geri qaytarıla bilməz!')) return; transactions=[]; budgets=[]; goals=[]; recurring=[]; journal=[]; settings={currencySymbol:'₼',theme:settings.theme,categories:defCats()}; saveData(); initUI(); alert('Sıfırlandı.'); }
+function resetAll(){ customConfirm('Bütün məlumatları sıfırla?','Bütün əməliyyatlar, büdcələr, hədəflər silinəcək! Bu geri qaytarıla bilməz.',()=>{ transactions=[]; budgets=[]; goals=[]; recurring=[]; journal=[]; settings={currencySymbol:'₼',theme:settings.theme,categories:defCats()}; saveData(); initUI(); showToast('✓ Bütün məlumatlar sıfırlandı'); },'⚠️'); }
 
 // ── PWA ──
 function setupPWA(){
@@ -752,11 +888,13 @@ function setupPWA(){
   if(isIos&&!isStandalone){ document.getElementById('pwaBanner').classList.add('show'); document.querySelector('.pwa-banner-text').innerHTML='📱 iPhone/iPad: Safari\'də <strong>Paylaş</strong> → <strong>"Ana ekrana əlavə et"</strong> seçin.'; }
   if('serviceWorker' in navigator){ const swCode=`const C='sb1';const A=[self.location.href];self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(A)));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match(e.request))));});`; const sb=new Blob([swCode],{type:'application/javascript'}),su=URL.createObjectURL(sb); navigator.serviceWorker.register(su).catch(()=>{}); }
 }
+window.setupPWA = setupPWA;
 
 // ── INIT ──
 function initUI(){ applyTheme(); populateDropdowns(); document.getElementById('txDate').value=today(); filterTx(); showTab('transactions'); }
-document.addEventListener('DOMContentLoaded',()=>{ checkStorage(); loadData(); initUI(); setupPWA(); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){['budgetModal','editBudgetModal','goalModal','addGoalModal','recurModal'].forEach(closeModal);closeDrawer();}});
+window.initUI = initUI;
+document.addEventListener('DOMContentLoaded',()=>{ checkStorage(); applyTheme(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){['budgetModal','editBudgetModal','goalModal','addGoalModal','recurModal','confirmModal'].forEach(closeModal);closeDrawer();}});
 </script>
 </body>
 </html>
